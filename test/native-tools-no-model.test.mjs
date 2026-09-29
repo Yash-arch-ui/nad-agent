@@ -89,6 +89,58 @@ describe("Native tool-calling — schema validation", () => {
     assert.deepEqual(getTokenBal.parameters.required, ["token"]);
     assert.ok(getTokenBal.parameters.properties.token);
   });
+
+  test("transfer_nft declares optional fromAddress (issue #112)", () => {
+    const tools = getToolDefinitions();
+    const transfer = tools.find((t) => t.name === "transfer_nft");
+    assert.ok(transfer, "transfer_nft tool not found");
+
+    const { properties, required } = transfer.parameters;
+    assert.deepEqual(
+      new Set(required),
+      new Set(["to", "contractAddress", "tokenId"]),
+      "fromAddress must stay out of required"
+    );
+    assert.ok(properties.fromAddress, "transfer_nft schema is missing optional fromAddress");
+    assert.equal(properties.fromAddress.type, "string", "fromAddress must be a string property");
+    assert.ok(
+      !required.includes("fromAddress"),
+      "fromAddress must not be required — the prompt advertises it as optional"
+    );
+    // The prompt promises a fallback when it is omitted, so the schema must too.
+    assert.ok(properties.fromAddress.description, "fromAddress needs a description");
+  });
+
+  test("no tool schema drifts from ACTIONS args + optionalArgs", () => {
+    // getToolDefinitions() is hand-written while systemPrompt() and
+    // nativeSystemPrompt() are generated from ACTIONS, so the two surfaces can
+    // disagree (issue #112). Every tool must declare exactly the arguments its
+    // prompt line advertises, with optionalArgs optional rather than required.
+    // hasRequiredArgs() in src/tools.mjs lets these two actions run with no
+    // arguments at all, so their `args` are opt-in and stay out of `required`.
+    const noRequiredArgs = new Set(["account", "get_nfts"]);
+
+    for (const tool of getToolDefinitions()) {
+      const spec = ACTIONS[tool.name];
+      assert.ok(spec, `${tool.name} has no ACTIONS entry`);
+      const optional = spec.optionalArgs ?? [];
+      const expected = [...spec.args, ...optional];
+      const expectedRequired = noRequiredArgs.has(tool.name)
+        ? []
+        : spec.args.filter((arg) => !optional.includes(arg));
+
+      assert.deepEqual(
+        Object.keys(tool.parameters.properties).sort(),
+        expected.sort(),
+        `${tool.name} properties drifted from ACTIONS`
+      );
+      assert.deepEqual(
+        [...tool.parameters.required].sort(),
+        expectedRequired.sort(),
+        `${tool.name} required drifted from ACTIONS`
+      );
+    }
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
