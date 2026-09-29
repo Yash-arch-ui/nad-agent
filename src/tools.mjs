@@ -1300,6 +1300,11 @@ export function getToolDefinitions() {
             type: "string",
             description: "Token ID of the NFT to transfer",
           },
+          fromAddress: {
+            type: "string",
+            description:
+              "Optional 0x address of the NFT owner to transfer from. Omit it to transfer from the agent's own wallet; set it only for a token owned by another address that has approved this account.",
+          },
         },
         required: ["to", "contractAddress", "tokenId"],
       },
